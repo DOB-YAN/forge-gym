@@ -178,7 +178,6 @@ export default function HistoryView({ data }: HistoryViewProps) {
                               ?.exercises.find((e) => e.id === exLog.exerciseId);
                             if (!exercise) return null;
                             
-                            const completedSets = exLog.sets.filter((s) => s.kg != null || s.reps != null);
                             const maxKg = Math.max(...exLog.sets.map((s) => s.kg ?? 0));
                             const totalReps = exLog.sets.reduce((sum, s) => sum + (s.reps ?? 0), 0);
 
