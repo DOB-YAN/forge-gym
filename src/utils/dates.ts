@@ -77,3 +77,9 @@ export function getMaxKg(sets: { kg: number | null; reps: number | null }[]): nu
 export function getTotalReps(sets: { kg: number | null; reps: number | null }[]): number {
   return sets.reduce((sum, s) => sum + (s.reps ?? 0), 0);
 }
+
+export function getDaysAgo(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return formatDate(date);
+}

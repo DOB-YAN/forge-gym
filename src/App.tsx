@@ -4,14 +4,16 @@ import TodayView from './components/TodayView';
 import ScheduleView from './components/ScheduleView';
 import ProgressView from './components/ProgressView';
 import BodyView from './components/BodyView';
+import HistoryView from './components/HistoryView';
 import RestTimer from './components/RestTimer';
 import type { UserId } from './types';
 
-type Tab = 'today' | 'schedule' | 'progress' | 'body';
+type Tab = 'today' | 'schedule' | 'progress' | 'body' | 'history';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'today', label: 'Today', icon: '🏋️' },
   { id: 'schedule', label: 'Schedule', icon: '📋' },
+  { id: 'history', label: 'History', icon: '📅' },
   { id: 'progress', label: 'Progress', icon: '📈' },
   { id: 'body', label: 'Body', icon: '⚖️' },
 ];
@@ -119,6 +121,7 @@ export default function App() {
             onRemoveExercise={removeExercise}
           />
         )}
+        {tab === 'history' && <HistoryView data={data} />}
         {tab === 'progress' && <ProgressView data={data} />}
         {tab === 'body' && (
           <BodyView
