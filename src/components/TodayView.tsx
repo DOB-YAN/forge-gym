@@ -70,6 +70,26 @@ export default function TodayView({
           : log
       )
     );
+    
+    // Auto-save on each entry
+    const session: WorkoutSession = {
+      id: existingSession?.id ?? generateId(),
+      date: todayDate,
+      dayKey: todayKey,
+      userId: activeUser,
+      exercises: logs.map((log) =>
+        log.exerciseId === exerciseId
+          ? {
+              ...log,
+              sets: log.sets.map((s, i) =>
+                i === setIndex ? { ...s, [field]: num } : s
+              ),
+            }
+          : log
+      ),
+      completed: true,
+    };
+    onSaveSession(session);
   };
 
   const handleSave = () => {

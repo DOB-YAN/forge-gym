@@ -28,7 +28,7 @@ export default function BodyView({ data, onAddMetric, onRemoveMetric }: BodyView
   const [activeUser, setActiveUser] = useState<UserId>('abel');
   const [weight, setWeight] = useState('');
   const [height, setHeight] = useState('');
-  const [showBoth, setShowBoth] = useState(true);
+  const [showBoth, setShowBoth] = useState(true); // Default to showing both users
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
