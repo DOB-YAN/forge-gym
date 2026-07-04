@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { AppData, DaySchedule, WorkoutSession, BodyMetric, Exercise } from '../types';
 import { DEFAULT_SCHEDULES } from '../types';
-import { supabase } from '../lib/supabase';
+import { db, firebaseReady, ref, set, onValue } from '../lib/firebase';
 
 const STORAGE_KEY = 'forge-gym-data-v1';
 
@@ -33,148 +33,38 @@ export function useAppData() {
   const [data, setData] = useState<AppData>(loadData());
   const [loading, setLoading] = useState(true);
 
-  // Load data from Supabase on mount (if available)
+  // Load data from Firebase on mount (if available)
   useEffect(() => {
-    async function loadFromSupabase() {
-      if (!supabase) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const [schedulesRes, sessionsRes, bodyMetricsRes] = await Promise.all([
-          supabase.from('schedules').select('*'),
-          supabase.from('sessions').select('*').order('date', { ascending: true }),
-          supabase.from('body_metrics').select('*').order('date', { ascending: true }),
-        ]);
-
-        if (schedulesRes.error) throw schedulesRes.error;
-        if (sessionsRes.error) throw sessionsRes.error;
-        if (bodyMetricsRes.error) throw bodyMetricsRes.error;
-
-        const schedules = schedulesRes.data.map((s) => ({
-          dayKey: s.day_key,
-          label: s.label,
-          muscleGroups: s.muscle_groups,
-          isRest: s.is_rest,
-          exercises: s.exercises,
-        }));
-
-        const sessions = sessionsRes.data.map((s) => ({
-          id: s.id,
-          date: s.date,
-          dayKey: s.day_key,
-          userId: s.user_id,
-          exercises: s.exercises,
-          completed: s.completed,
-        }));
-
-        const bodyMetrics = bodyMetricsRes.data.map((m) => ({
-          id: m.id,
-          date: m.date,
-          userId: m.user_id,
-          weightKg: m.weight_kg,
-          heightCm: m.height_cm,
-        }));
-
-        setData({
-          schedules: schedules.length > 0 ? schedules : createDefaultData().schedules,
-          sessions,
-          bodyMetrics,
-        });
-      } catch (error) {
-        console.error('Error loading from Supabase:', error);
-        // Fallback to localStorage if Supabase fails
-        setData(loadData());
-      } finally {
-        setLoading(false);
-      }
+    if (!firebaseReady) {
+      setLoading(false);
+      return;
     }
 
-    loadFromSupabase();
+    const dataRef = ref(db, 'forge-gym-data');
+    
+    const unsubscribe = onValue(dataRef, (snapshot) => {
+      const firebaseData = snapshot.val();
+      if (firebaseData) {
+        setData(firebaseData);
+      }
+      setLoading(false);
+    }, (error) => {
+      console.error('Error loading from Firebase:', error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  // Sync schedules to Supabase (if available)
+  // Sync data to Firebase
   useEffect(() => {
-    if (loading || !supabase) return;
+    if (loading || !firebaseReady) return;
 
-    async function syncSchedules() {
-      try {
-        for (const schedule of data.schedules) {
-          const { error } = await supabase!.from('schedules').upsert({
-              day_key: schedule.dayKey,
-              label: schedule.label,
-              muscle_groups: schedule.muscleGroups,
-              is_rest: schedule.isRest,
-              exercises: schedule.exercises,
-            }, {
-              onConflict: 'day_key'
-            });
-
-          if (error) console.error('Error syncing schedule:', error);
-        }
-      } catch (error) {
-        console.error('Error syncing schedules:', error);
-      }
-    }
-
-    syncSchedules();
-  }, [data.schedules, loading]);
-
-  // Sync sessions to Supabase (if available)
-  useEffect(() => {
-    if (loading || !supabase) return;
-
-    async function syncSessions() {
-      try {
-        for (const session of data.sessions) {
-          const { error } = await supabase!.from('sessions').upsert({
-              id: session.id,
-              date: session.date,
-              day_key: session.dayKey,
-              user_id: session.userId,
-              exercises: session.exercises,
-              completed: session.completed,
-            }, {
-              onConflict: 'id'
-            });
-
-          if (error) console.error('Error syncing session:', error);
-        }
-      } catch (error) {
-        console.error('Error syncing sessions:', error);
-      }
-    }
-
-    syncSessions();
-  }, [data.sessions, loading]);
-
-  // Sync body metrics to Supabase (if available)
-  useEffect(() => {
-    if (loading || !supabase) return;
-
-    async function syncBodyMetrics() {
-      try {
-        for (const metric of data.bodyMetrics) {
-          const { error } = await supabase!.from('body_metrics').upsert({
-              id: metric.id,
-              date: metric.date,
-              user_id: metric.userId,
-              weight_kg: metric.weightKg,
-              height_cm: metric.heightCm,
-            }, {
-              onConflict: 'id'
-            });
-
-          if (error) console.error('Error syncing body metric:', error);
-        }
-      } catch (error) {
-        console.error('Error syncing body metrics:', error);
-      }
-    }
-
-    syncBodyMetrics();
-  }, [data.bodyMetrics, loading]);
+    const dataRef = ref(db, 'forge-gym-data');
+    set(dataRef, data).catch((error) => {
+      console.error('Error syncing to Firebase:', error);
+    });
+  }, [data, loading]);
 
   // Also save to localStorage as backup
   useEffect(() => {
@@ -228,17 +118,10 @@ export function useAppData() {
   }, []);
 
   const removeBodyMetric = useCallback((id: string) => {
-    setData((prev) => {
-      // Delete from Supabase if available
-      if (supabase) {
-        supabase.from('body_metrics').delete().eq('id', id);
-      }
-      
-      return {
-        ...prev,
-        bodyMetrics: prev.bodyMetrics.filter((m) => m.id !== id),
-      };
-    });
+    setData((prev) => ({
+      ...prev,
+      bodyMetrics: prev.bodyMetrics.filter((m) => m.id !== id),
+    }));
   }, []);
 
   const exportData = useCallback(() => {
