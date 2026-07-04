@@ -3,6 +3,8 @@ import type { AppData, DaySchedule, WorkoutSession, BodyMetric, Exercise } from 
 import { DEFAULT_SCHEDULES } from '../types';
 import { supabase } from '../lib/supabase';
 
+const STORAGE_KEY = 'forge-gym-data-v1';
+
 function createDefaultData(): AppData {
   return {
     schedules: DEFAULT_SCHEDULES.map((s) => ({ ...s, exercises: [] })),
@@ -11,13 +13,34 @@ function createDefaultData(): AppData {
   };
 }
 
+function loadData(): AppData {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return createDefaultData();
+    const parsed = JSON.parse(raw) as AppData;
+    if (!parsed.schedules?.length) return createDefaultData();
+    return parsed;
+  } catch {
+    return createDefaultData();
+  }
+}
+
+function saveData(data: AppData): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
 export function useAppData() {
-  const [data, setData] = useState<AppData>(createDefaultData());
+  const [data, setData] = useState<AppData>(loadData());
   const [loading, setLoading] = useState(true);
 
-  // Load data from Supabase on mount
+  // Load data from Supabase on mount (if available)
   useEffect(() => {
     async function loadFromSupabase() {
+      if (!supabase) {
+        setLoading(false);
+        return;
+      }
+
       try {
         const [schedulesRes, sessionsRes, bodyMetricsRes] = await Promise.all([
           supabase.from('schedules').select('*'),
@@ -61,8 +84,8 @@ export function useAppData() {
         });
       } catch (error) {
         console.error('Error loading from Supabase:', error);
-        // Fallback to default data if Supabase fails
-        setData(createDefaultData());
+        // Fallback to localStorage if Supabase fails
+        setData(loadData());
       } finally {
         setLoading(false);
       }
@@ -71,16 +94,14 @@ export function useAppData() {
     loadFromSupabase();
   }, []);
 
-  // Sync schedules to Supabase
+  // Sync schedules to Supabase (if available)
   useEffect(() => {
-    if (loading) return;
+    if (loading || !supabase) return;
 
     async function syncSchedules() {
       try {
         for (const schedule of data.schedules) {
-          const { error } = await supabase
-            .from('schedules')
-            .upsert({
+          const { error } = await supabase!.from('schedules').upsert({
               day_key: schedule.dayKey,
               label: schedule.label,
               muscle_groups: schedule.muscleGroups,
@@ -100,16 +121,14 @@ export function useAppData() {
     syncSchedules();
   }, [data.schedules, loading]);
 
-  // Sync sessions to Supabase
+  // Sync sessions to Supabase (if available)
   useEffect(() => {
-    if (loading) return;
+    if (loading || !supabase) return;
 
     async function syncSessions() {
       try {
         for (const session of data.sessions) {
-          const { error } = await supabase
-            .from('sessions')
-            .upsert({
+          const { error } = await supabase!.from('sessions').upsert({
               id: session.id,
               date: session.date,
               day_key: session.dayKey,
@@ -130,16 +149,14 @@ export function useAppData() {
     syncSessions();
   }, [data.sessions, loading]);
 
-  // Sync body metrics to Supabase
+  // Sync body metrics to Supabase (if available)
   useEffect(() => {
-    if (loading) return;
+    if (loading || !supabase) return;
 
     async function syncBodyMetrics() {
       try {
         for (const metric of data.bodyMetrics) {
-          const { error } = await supabase
-            .from('body_metrics')
-            .upsert({
+          const { error } = await supabase!.from('body_metrics').upsert({
               id: metric.id,
               date: metric.date,
               user_id: metric.userId,
@@ -158,6 +175,11 @@ export function useAppData() {
 
     syncBodyMetrics();
   }, [data.bodyMetrics, loading]);
+
+  // Also save to localStorage as backup
+  useEffect(() => {
+    saveData(data);
+  }, [data]);
 
   const updateSchedule = useCallback((dayKey: string, updater: (s: DaySchedule) => DaySchedule) => {
     setData((prev) => ({
@@ -207,8 +229,10 @@ export function useAppData() {
 
   const removeBodyMetric = useCallback((id: string) => {
     setData((prev) => {
-      // Delete from Supabase
-      supabase.from('body_metrics').delete().eq('id', id);
+      // Delete from Supabase if available
+      if (supabase) {
+        supabase.from('body_metrics').delete().eq('id', id);
+      }
       
       return {
         ...prev,
