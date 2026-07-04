@@ -45,7 +45,27 @@ export default function TodayView({
 
   useEffect(() => {
     if (existingSession) {
-      setLogs(existingSession.exercises);
+      // Update existing session to match current schedule set counts
+      setLogs(
+        existingSession.exercises.map((exLog) => {
+          const exercise = schedule.exercises.find((ex) => ex.id === exLog.exerciseId);
+          const targetSetCount = exercise?.setCount ?? 3;
+          
+          // Add or remove sets to match target count
+          if (exLog.sets.length < targetSetCount) {
+            return {
+              ...exLog,
+              sets: [...exLog.sets, ...Array.from({ length: targetSetCount - exLog.sets.length }, () => ({ kg: null, reps: null }))]
+            };
+          } else if (exLog.sets.length > targetSetCount) {
+            return {
+              ...exLog,
+              sets: exLog.sets.slice(0, targetSetCount)
+            };
+          }
+          return exLog;
+        })
+      );
     } else {
       setLogs(
         schedule.exercises.map((ex) => ({
