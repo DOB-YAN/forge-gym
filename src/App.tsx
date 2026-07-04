@@ -26,6 +26,7 @@ export default function App() {
 
   const {
     data,
+    loading,
     addExercise,
     updateExercise,
     removeExercise,
@@ -104,31 +105,42 @@ export default function App() {
 
       {/* Main content */}
       <main className="flex-1 px-4 pt-4 overflow-y-auto">
-        {tab === 'today' && (
-          <TodayView
-            data={data}
-            activeUser={activeUser}
-            onUserChange={setActiveUser}
-            onSaveSession={saveSession}
-            onStartTimer={() => setTimerOpen(true)}
-          />
-        )}
-        {tab === 'schedule' && (
-          <ScheduleView
-            schedules={data.schedules}
-            onAddExercise={addExercise}
-            onUpdateExercise={updateExercise}
-            onRemoveExercise={removeExercise}
-          />
-        )}
-        {tab === 'history' && <HistoryView data={data} />}
-        {tab === 'progress' && <ProgressView data={data} />}
-        {tab === 'body' && (
-          <BodyView
-            data={data}
-            onAddMetric={addBodyMetric}
-            onRemoveMetric={removeBodyMetric}
-          />
+        {loading ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <div className="text-4xl mb-4 animate-bounce">🏋️</div>
+              <p className="text-forge-muted">Loading your data...</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            {tab === 'today' && (
+              <TodayView
+                data={data}
+                activeUser={activeUser}
+                onUserChange={setActiveUser}
+                onSaveSession={saveSession}
+                onStartTimer={() => setTimerOpen(true)}
+              />
+            )}
+            {tab === 'schedule' && (
+              <ScheduleView
+                schedules={data.schedules}
+                onAddExercise={addExercise}
+                onUpdateExercise={updateExercise}
+                onRemoveExercise={removeExercise}
+              />
+            )}
+            {tab === 'history' && <HistoryView data={data} />}
+            {tab === 'progress' && <ProgressView data={data} />}
+            {tab === 'body' && (
+              <BodyView
+                data={data}
+                onAddMetric={addBodyMetric}
+                onRemoveMetric={removeBodyMetric}
+              />
+            )}
+          </>
         )}
       </main>
 

@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { AppData, DaySchedule, WorkoutSession, BodyMetric, Exercise } from '../types';
 import { DEFAULT_SCHEDULES } from '../types';
-
-const STORAGE_KEY = 'forge-gym-data-v1';
+import { supabase } from '../lib/supabase';
 
 function createDefaultData(): AppData {
   return {
@@ -12,28 +11,153 @@ function createDefaultData(): AppData {
   };
 }
 
-function loadData(): AppData {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return createDefaultData();
-    const parsed = JSON.parse(raw) as AppData;
-    if (!parsed.schedules?.length) return createDefaultData();
-    return parsed;
-  } catch {
-    return createDefaultData();
-  }
-}
-
-function saveData(data: AppData): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
-
 export function useAppData() {
-  const [data, setData] = useState<AppData>(loadData);
+  const [data, setData] = useState<AppData>(createDefaultData());
+  const [loading, setLoading] = useState(true);
 
+  // Load data from Supabase on mount
   useEffect(() => {
-    saveData(data);
-  }, [data]);
+    async function loadFromSupabase() {
+      try {
+        const [schedulesRes, sessionsRes, bodyMetricsRes] = await Promise.all([
+          supabase.from('schedules').select('*'),
+          supabase.from('sessions').select('*').order('date', { ascending: true }),
+          supabase.from('body_metrics').select('*').order('date', { ascending: true }),
+        ]);
+
+        if (schedulesRes.error) throw schedulesRes.error;
+        if (sessionsRes.error) throw sessionsRes.error;
+        if (bodyMetricsRes.error) throw bodyMetricsRes.error;
+
+        const schedules = schedulesRes.data.map((s) => ({
+          dayKey: s.day_key,
+          label: s.label,
+          muscleGroups: s.muscle_groups,
+          isRest: s.is_rest,
+          exercises: s.exercises,
+        }));
+
+        const sessions = sessionsRes.data.map((s) => ({
+          id: s.id,
+          date: s.date,
+          dayKey: s.day_key,
+          userId: s.user_id,
+          exercises: s.exercises,
+          completed: s.completed,
+        }));
+
+        const bodyMetrics = bodyMetricsRes.data.map((m) => ({
+          id: m.id,
+          date: m.date,
+          userId: m.user_id,
+          weightKg: m.weight_kg,
+          heightCm: m.height_cm,
+        }));
+
+        setData({
+          schedules: schedules.length > 0 ? schedules : createDefaultData().schedules,
+          sessions,
+          bodyMetrics,
+        });
+      } catch (error) {
+        console.error('Error loading from Supabase:', error);
+        // Fallback to default data if Supabase fails
+        setData(createDefaultData());
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadFromSupabase();
+  }, []);
+
+  // Sync schedules to Supabase
+  useEffect(() => {
+    if (loading) return;
+
+    async function syncSchedules() {
+      try {
+        for (const schedule of data.schedules) {
+          const { error } = await supabase
+            .from('schedules')
+            .upsert({
+              day_key: schedule.dayKey,
+              label: schedule.label,
+              muscle_groups: schedule.muscleGroups,
+              is_rest: schedule.isRest,
+              exercises: schedule.exercises,
+            }, {
+              onConflict: 'day_key'
+            });
+
+          if (error) console.error('Error syncing schedule:', error);
+        }
+      } catch (error) {
+        console.error('Error syncing schedules:', error);
+      }
+    }
+
+    syncSchedules();
+  }, [data.schedules, loading]);
+
+  // Sync sessions to Supabase
+  useEffect(() => {
+    if (loading) return;
+
+    async function syncSessions() {
+      try {
+        for (const session of data.sessions) {
+          const { error } = await supabase
+            .from('sessions')
+            .upsert({
+              id: session.id,
+              date: session.date,
+              day_key: session.dayKey,
+              user_id: session.userId,
+              exercises: session.exercises,
+              completed: session.completed,
+            }, {
+              onConflict: 'id'
+            });
+
+          if (error) console.error('Error syncing session:', error);
+        }
+      } catch (error) {
+        console.error('Error syncing sessions:', error);
+      }
+    }
+
+    syncSessions();
+  }, [data.sessions, loading]);
+
+  // Sync body metrics to Supabase
+  useEffect(() => {
+    if (loading) return;
+
+    async function syncBodyMetrics() {
+      try {
+        for (const metric of data.bodyMetrics) {
+          const { error } = await supabase
+            .from('body_metrics')
+            .upsert({
+              id: metric.id,
+              date: metric.date,
+              user_id: metric.userId,
+              weight_kg: metric.weightKg,
+              height_cm: metric.heightCm,
+            }, {
+              onConflict: 'id'
+            });
+
+          if (error) console.error('Error syncing body metric:', error);
+        }
+      } catch (error) {
+        console.error('Error syncing body metrics:', error);
+      }
+    }
+
+    syncBodyMetrics();
+  }, [data.bodyMetrics, loading]);
 
   const updateSchedule = useCallback((dayKey: string, updater: (s: DaySchedule) => DaySchedule) => {
     setData((prev) => ({
@@ -82,10 +206,15 @@ export function useAppData() {
   }, []);
 
   const removeBodyMetric = useCallback((id: string) => {
-    setData((prev) => ({
-      ...prev,
-      bodyMetrics: prev.bodyMetrics.filter((m) => m.id !== id),
-    }));
+    setData((prev) => {
+      // Delete from Supabase
+      supabase.from('body_metrics').delete().eq('id', id);
+      
+      return {
+        ...prev,
+        bodyMetrics: prev.bodyMetrics.filter((m) => m.id !== id),
+      };
+    });
   }, []);
 
   const exportData = useCallback(() => {
@@ -107,6 +236,7 @@ export function useAppData() {
 
   return {
     data,
+    loading,
     updateSchedule,
     addExercise,
     updateExercise,
