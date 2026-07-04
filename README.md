@@ -1,6 +1,6 @@
 # FORGE — Gym Tracker
 
-A mobile-first workout tracker for **ABEL** and **KENENI**.
+A mobile-first workout tracker for **ABEL** and **KENENI** with real-time cloud sync.
 
 ## Features
 
@@ -9,9 +9,13 @@ A mobile-first workout tracker for **ABEL** and **KENENI**.
 - **Dual user logging** — Track kg & reps for both ABEL (blue) and KENENI (green)
 - **Last week comparison** — See last week's same-day numbers so you never go backwards
 - **Progress charts** — Max kg, total reps, and volume over time
+- **Muscle group volume graphs** — Track progress by muscle group
 - **Body metrics** — Optional weekly weight & height tracking with graphs
-- **Rest timer** — 1-minute (or custom) timer between sets
-- **Data backup** — Export/import JSON so you never lose progress
+- **Rest timer** — 1, 2, 3, 4, or 5-minute timer with minimize popup and pleasant sound
+- **Auto-save** — Workouts save automatically on each entry
+- **Real-time sync** — Data syncs across all devices via Firebase (free)
+- **History view** — See daily workouts for the past month with progress graphs
+- **Up to 6 sets** — Support for up to 6 sets per exercise
 
 ## Run on Your Phone
 
@@ -34,12 +38,10 @@ A mobile-first workout tracker for **ABEL** and **KENENI**.
 
 ### Option 3: Deploy online (permanent link)
 
-Deploy the `dist` folder to [Netlify Drop](https://app.netlify.com/drop) or run:
+The app is automatically deployed to GitHub Pages at:
+**https://dob-yan.github.io/forge-gym/**
 
-```bash
-npm run build
-npx serve dist -l 3000 --host
-```
+Any changes pushed to the `main` branch will automatically deploy.
 
 ## Quick Start
 
